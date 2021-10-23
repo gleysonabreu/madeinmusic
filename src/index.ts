@@ -29,10 +29,28 @@ client.on("message", async message => {
   if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}play`)) {
     execute(message, serverQueue);
     return;
+  } else if(message.content.startsWith(`${process.env.COMMAND_SYMBOL}stop`)){
+    stop(message, serverQueue);
+    return;
   } else {
     message.channel.send("You need to enter a valid command!");
+    return;
   }
 });
+
+async function stop(message: Message, serverQueue: any) {
+  const voiceChannel = message.member?.voice.channel;
+  if(!voiceChannel) {
+    return message.channel.send("You have to be in a voice channel to stop the music!");   
+  }
+
+  if(!serverQueue) {
+    return message.channel.send("There is no song that I could stop!");
+  }
+
+  serverQueue.songs = [];
+  serverQueue.connection.dispatcher.end();
+}
 
 async function execute(message: Message, serverQueue: Map<any, any>) {
   const args = message.content.split(" ");
@@ -74,7 +92,7 @@ async function execute(message: Message, serverQueue: Map<any, any>) {
    };
 
   if (!serverQueue) {
-    const queueContruct = {
+    const queueConstruct = {
       textChannel: message.channel,
       voiceChannel: voiceChannel,
       connection: null as any,
@@ -83,14 +101,14 @@ async function execute(message: Message, serverQueue: Map<any, any>) {
       playing: true
     };
 
-    queue.set(message.guild?.id, queueContruct);
+    queue.set(message.guild?.id, queueConstruct);
 
-    queueContruct.songs.push(song);
+    queueConstruct.songs.push(song);
 
     try {
       var connection = await voiceChannel.join();
-      queueContruct.connection = connection;
-      play(message.guild, queueContruct.songs[0]);
+      queueConstruct.connection = connection;
+      play(message.guild, queueConstruct.songs[0]);
     } catch (err: any) {
       console.log(err);
       queue.delete(message.guild?.id);
@@ -110,7 +128,6 @@ function play(guild: Discord.Guild | null, song: any) {
     queue.delete(guild?.id);
     return;
   }
-
   const dispatcher = serverQueue.connection
     .play(ytdl(song.url, { filter: 'audioonly', highWaterMark: 1048576 / 4, }))
     .on("finish", () => {
