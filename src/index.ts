@@ -1,12 +1,25 @@
 import Discord, { Message } from "discord.js";
 import ytdl from "ytdl-core";
-import axios from 'axios';
 import dotenv from 'dotenv';
+import { searchYoutube } from "./youtube";
 
 dotenv.config();
 
+type Song = {
+  title: string;
+  url: string;
+}
+type Queue = {
+  textChannel: Discord.TextChannel | Discord.DMChannel | Discord.NewsChannel;
+  voiceChannel: Discord.VoiceChannel;
+  connection: Discord.VoiceConnection | null;
+  songs: Song[];
+  volume: number;
+  playing: boolean;
+}
+
 const client = new Discord.Client();
-const queue = new Map();
+const queue = new Map<string, Queue>();
 
 client.once("ready", () => {
   console.log(`${process.env.BOT_NAME} ready!`);
@@ -24,8 +37,9 @@ client.on("message", async message => {
   if (message.author.bot) return;
   if (!message.content.startsWith(`${process.env.COMMAND_SYMBOL}`)) return;
 
-  const serverQueue = queue.get(message.guild?.id);
+  if (!message.guild) return;
 
+  const serverQueue = queue.get(message.guild.id);
   if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}play`)) {
     execute(message, serverQueue);
     return;
@@ -52,91 +66,95 @@ async function stop(message: Message, serverQueue: any) {
   serverQueue.connection.dispatcher.end();
 }
 
-async function execute(message: Message, serverQueue: Map<any, any>) {
+async function execute(message: Message, serverQueue: Queue | undefined) {
   const args = message.content.split(" ");
 
   const voiceChannel = message.member?.voice.channel;
   if (!voiceChannel)
-    return message.channel.send(
-      "You need to be in a voice channel to play music!"
-    );
+    return message.channel.send("You need to be in a voice channel to play music!");
 
-		const user = message.client.user;
-		if (!user) return;
+	const user = message.client.user;
+	if (!user) return;
 
   const permissions = voiceChannel.permissionsFor(user);
   if (!permissions?.has("CONNECT") || !permissions?.has("SPEAK")) {
-    return message.channel.send(
-      "I need the permissions to join and speak in your voice channel!"
-    );
+    return message.channel.send("I need the permissions to join and speak in your voice channel!");
   }
 
-  type YT = {
-    data: {
-      items: {id: { videoId: string }}[],
-    }
+  const verifySameChannelVoice = queue.get(message.guild?.id as string);
+  if(verifySameChannelVoice && message?.member?.voice?.channel?.id !== verifySameChannelVoice?.voiceChannel.id) {
+    return message.channel.send("You must be on the same channel as the bot to add songs!");
   }
+  
 
-  let musicName = '';
-  args.map((music, index) => {
-    if( index === 0 ) return;
-
-    musicName += ` ${music}`;
-  });
-
-  const result = (await axios.get(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${musicName}&type=video&key=${process.env.YOUTUBE_API}`)) as YT;
-  const songInfo = await ytdl.getInfo( result.data?.items[0].id.videoId);
+  const result = await searchYoutube(args);
+  const songInfo = await ytdl.getInfo(result.data.items[0].id.videoId);
   const song = {
         title: songInfo.videoDetails.title,
         url: songInfo.videoDetails.video_url,
    };
 
   if (!serverQueue) {
-    const queueConstruct = {
+    const queueConstruct: Queue = {
       textChannel: message.channel,
       voiceChannel: voiceChannel,
-      connection: null as any,
-      songs: [] as any[],
+      songs: [],
       volume: 5,
-      playing: true
+      playing: true,
+      connection: null,
     };
 
-    queue.set(message.guild?.id, queueConstruct);
+    if(!message.guild) return;
 
+    queue.set(message.guild.id, queueConstruct);
     queueConstruct.songs.push(song);
 
     try {
       var connection = await voiceChannel.join();
       queueConstruct.connection = connection;
       play(message.guild, queueConstruct.songs[0]);
+      queueConstruct.connection.on("disconnect", () => {
+        if(!message.guild) return;
+
+        queue.delete(message.guild.id);
+      });
     } catch (err: any) {
       console.log(err);
       queue.delete(message.guild?.id);
       return message.channel.send(err);
     }
   } else {
-    const musics = queue.get(message.guild?.id);
-    musics.songs.push(song)
-    return message.channel.send(`**${song.title}** has been added to the queue!`);
+    if(!message.guild) return;
+
+    const musics = queue.get(message.guild.id);
+    if(musics) {
+      musics.songs.push(song)
+      return message.channel.send(`**${song.title}** has been added to the queue!`);
+    }
   }
 }
 
-function play(guild: Discord.Guild | null, song: any) {
-  const serverQueue = queue.get(guild?.id);
+function play(guild: Discord.Guild, song: Song) {
+  const serverQueue = queue.get(guild.id);
   if (!song) {
-    serverQueue.voiceChannel.leave();
-    queue.delete(guild?.id);
+    if(serverQueue) {
+      serverQueue.voiceChannel.leave();
+      queue.delete(guild?.id);
+    }
     return;
   }
-  const dispatcher = serverQueue.connection
+
+  if (serverQueue && serverQueue.connection) {
+    const dispatcher = serverQueue.connection
     .play(ytdl(song.url, { filter: 'audioonly', highWaterMark: 1048576 / 4, }))
     .on("finish", () => {
       serverQueue.songs.shift();
       play(guild, serverQueue.songs[0]);
     })
     .on("error", (error: any) => console.error(error));
-  dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
-  serverQueue.textChannel.send(`Start playing: **${song.title}**`);
+    dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
+    serverQueue.textChannel.send(`Start playing: **${song.title}**`);
+  }
 }
 
 client.login(process.env.BOT_TOKEN);
