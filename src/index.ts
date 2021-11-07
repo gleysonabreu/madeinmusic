@@ -2,8 +2,11 @@ import Discord, { Message } from "discord.js";
 import ytdl from "ytdl-core";
 import dotenv from 'dotenv';
 import { searchYoutube } from "./youtube";
+import path from 'path';
 
-dotenv.config();
+dotenv.config({
+  path: path.resolve(__dirname, '..', '.env')
+});
 
 type Song = {
   title: string;
