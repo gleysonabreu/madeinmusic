@@ -3,11 +3,20 @@ import ytdl from "ytdl-core";
 import dotenv from 'dotenv';
 import { searchYoutube } from "./youtube";
 import path from 'path';
+import axios from 'axios';
 
 dotenv.config({
   path: path.resolve(__dirname, '..', '.env')
 });
 
+type ResponsePancakeSwap = {
+  updated_at: string;
+  data: {
+    name: string;
+    symbol: string;
+    price: string;
+  }
+}
 type Song = {
   title: string;
   url: string;
@@ -49,11 +58,44 @@ client.on("message", async message => {
   } else if(message.content.startsWith(`${process.env.COMMAND_SYMBOL}stop`)){
     stop(message, serverQueue);
     return;
+  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price list`)) {
+    message.reply("```- CCAR\n- BCOIN\n- CSHIP\n- PVU```");
+  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price`)) {
+    await prices(message);
   } else {
     message.channel.send("You need to enter a valid command!");
     return;
   }
 });
+
+async function prices(message: Message) {
+  const [, price] = message.content.split(" ");
+  
+  let token = '';
+  switch(price) {
+    case 'ccar':
+        token = String(process.env.CCAR);
+        break;
+    case 'bcoin':
+      token = String(process.env.BCOIN);
+      break;
+    case 'pvu':
+      token = String(process.env.PVU);
+      break;
+    case 'cship':
+      token = String(process.env.CSHIP);
+      break;
+    default:
+      token = String(process.env.CCAR);
+      break;
+  }
+
+  const { data, updated_at } = (await axios.get<ResponsePancakeSwap>(`${process.env.PANCAKESWAP_URL}/${token}`)).data
+  const priceUSD = Number(data.price);
+  const priceDollar = priceUSD.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
+  const date = new Date(updated_at);
+  message.reply(`Name: ${data.name} - Price: USD ${priceDollar} - Date: ${date}`);
+}
 
 async function stop(message: Message, serverQueue: any) {
   const voiceChannel = message.member?.voice.channel;
