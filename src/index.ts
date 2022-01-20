@@ -62,6 +62,8 @@ client.on("message", async message => {
     message.reply("```- CCAR\n- BCOIN\n- CSHIP\n- PVU```");
   } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price`)) {
     await prices(message);
+  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}next`)) {
+    next(message);
   } else {
     message.channel.send("You need to enter a valid command!");
     return;
@@ -95,6 +97,22 @@ async function prices(message: Message) {
   const priceDollar = priceUSD.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
   const date = new Date(updated_at);
   message.reply(`Name: ${data.name} - Price: USD ${priceDollar} - Date: ${date}`);
+}
+
+async function next(message: Discord.Message) {
+  const voiceChannel = message.member?.voice.channel;
+  if(!voiceChannel) {
+    return message.channel.send("You have to be in a voice channel to use this command!")
+  }
+
+  const guild = message.guild;
+  if (!guild) return;
+  
+  const serverQueue = queue.get(guild.id);
+  if (serverQueue && serverQueue.connection) {
+    serverQueue.songs.shift();
+    play(guild, serverQueue.songs[0]);
+  }
 }
 
 async function stop(message: Message, serverQueue: any) {
