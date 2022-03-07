@@ -55,13 +55,11 @@ client.on("message", async message => {
   if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}play`)) {
     execute(message, serverQueue);
     return;
-  } else if(message.content.startsWith(`${process.env.COMMAND_SYMBOL}stop`)){
+  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}stop`)) {
     stop(message, serverQueue);
     return;
   } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price list`)) {
     message.reply("```- CCAR\n- BCOIN\n- CSHIP\n- PVU```");
-  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price`)) {
-    await prices(message);
   } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}next`)) {
     next(message);
   } else {
@@ -70,44 +68,15 @@ client.on("message", async message => {
   }
 });
 
-async function prices(message: Message) {
-  const [, price] = message.content.split(" ");
-  
-  let token = '';
-  switch(price) {
-    case 'ccar':
-        token = String(process.env.CCAR);
-        break;
-    case 'bcoin':
-      token = String(process.env.BCOIN);
-      break;
-    case 'pvu':
-      token = String(process.env.PVU);
-      break;
-    case 'cship':
-      token = String(process.env.CSHIP);
-      break;
-    default:
-      token = String(process.env.CCAR);
-      break;
-  }
-
-  const { data, updated_at } = (await axios.get<ResponsePancakeSwap>(`${process.env.PANCAKESWAP_URL}/${token}`)).data
-  const priceUSD = Number(data.price);
-  const priceDollar = priceUSD.toLocaleString('en-US', { style: 'currency', currency: 'USD'})
-  const date = new Date(updated_at);
-  message.reply(`Name: ${data.name} - Price: USD ${priceDollar} - Date: ${date}`);
-}
-
 async function next(message: Discord.Message) {
   const voiceChannel = message.member?.voice.channel;
-  if(!voiceChannel) {
+  if (!voiceChannel) {
     return message.channel.send("You have to be in a voice channel to use this command!")
   }
 
   const guild = message.guild;
   if (!guild) return;
-  
+
   const serverQueue = queue.get(guild.id);
   if (serverQueue && serverQueue.connection) {
     serverQueue.songs.shift();
@@ -117,11 +86,11 @@ async function next(message: Discord.Message) {
 
 async function stop(message: Message, serverQueue: any) {
   const voiceChannel = message.member?.voice.channel;
-  if(!voiceChannel) {
-    return message.channel.send("You have to be in a voice channel to stop the music!");   
+  if (!voiceChannel) {
+    return message.channel.send("You have to be in a voice channel to stop the music!");
   }
 
-  if(!serverQueue) {
+  if (!serverQueue) {
     return message.channel.send("There is no song that I could stop!");
   }
 
@@ -136,8 +105,8 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
   if (!voiceChannel)
     return message.channel.send("You need to be in a voice channel to play music!");
 
-	const user = message.client.user;
-	if (!user) return;
+  const user = message.client.user;
+  if (!user) return;
 
   const permissions = voiceChannel.permissionsFor(user);
   if (!permissions?.has("CONNECT") || !permissions?.has("SPEAK")) {
@@ -145,17 +114,17 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
   }
 
   const verifySameChannelVoice = queue.get(message.guild?.id as string);
-  if(verifySameChannelVoice && message?.member?.voice?.channel?.id !== verifySameChannelVoice?.voiceChannel.id) {
+  if (verifySameChannelVoice && message?.member?.voice?.channel?.id !== verifySameChannelVoice?.voiceChannel.id) {
     return message.channel.send("You must be on the same channel as the bot to add songs!");
   }
-  
+
 
   const result = await searchYoutube(args);
   const songInfo = await ytdl.getInfo(result.data.items[0].id.videoId);
   const song = {
-        title: songInfo.videoDetails.title,
-        url: songInfo.videoDetails.video_url,
-   };
+    title: songInfo.videoDetails.title,
+    url: songInfo.videoDetails.video_url,
+  };
 
   if (!serverQueue) {
     const queueConstruct: Queue = {
@@ -167,7 +136,7 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
       connection: null,
     };
 
-    if(!message.guild) return;
+    if (!message.guild) return;
 
     queue.set(message.guild.id, queueConstruct);
     queueConstruct.songs.push(song);
@@ -177,7 +146,7 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
       queueConstruct.connection = connection;
       play(message.guild, queueConstruct.songs[0]);
       queueConstruct.connection.on("disconnect", () => {
-        if(!message.guild) return;
+        if (!message.guild) return;
 
         queue.delete(message.guild.id);
       });
@@ -187,10 +156,10 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
       return message.channel.send(err);
     }
   } else {
-    if(!message.guild) return;
+    if (!message.guild) return;
 
     const musics = queue.get(message.guild.id);
-    if(musics) {
+    if (musics) {
       musics.songs.push(song)
       return message.channel.send(`**${song.title}** has been added to the queue!`);
     }
@@ -200,7 +169,7 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
 function play(guild: Discord.Guild, song: Song) {
   const serverQueue = queue.get(guild.id);
   if (!song) {
-    if(serverQueue) {
+    if (serverQueue) {
       serverQueue.voiceChannel.leave();
       queue.delete(guild?.id);
     }
@@ -209,12 +178,12 @@ function play(guild: Discord.Guild, song: Song) {
 
   if (serverQueue && serverQueue.connection) {
     const dispatcher = serverQueue.connection
-    .play(ytdl(song.url, { filter: 'audioonly', highWaterMark: 1048576 / 4, }))
-    .on("finish", () => {
-      serverQueue.songs.shift();
-      play(guild, serverQueue.songs[0]);
-    })
-    .on("error", (error: any) => console.error(error));
+      .play(ytdl(song.url, { filter: 'audioonly', highWaterMark: 1048576 / 4, }))
+      .on("finish", () => {
+        serverQueue.songs.shift();
+        play(guild, serverQueue.songs[0]);
+      })
+      .on("error", (error: any) => console.error(error));
     dispatcher.setVolumeLogarithmic(serverQueue.volume / 5);
     serverQueue.textChannel.send(`Start playing: **${song.title}**`);
   }
