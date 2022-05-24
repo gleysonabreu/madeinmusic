@@ -1,22 +1,9 @@
 import Discord, { Message } from "discord.js";
 import ytdl from "ytdl-core";
-import dotenv from 'dotenv';
-import { searchYoutube } from "./youtube";
-import path from 'path';
-import axios from 'axios';
+import './config/dotenv';
+import { env } from "./config/env";
+import { crawler } from "./crawler";
 
-dotenv.config({
-  path: path.resolve(__dirname, '..', '.env')
-});
-
-type ResponsePancakeSwap = {
-  updated_at: string;
-  data: {
-    name: string;
-    symbol: string;
-    price: string;
-  }
-}
 type Song = {
   title: string;
   url: string;
@@ -34,33 +21,31 @@ const client = new Discord.Client();
 const queue = new Map<string, Queue>();
 
 client.once("ready", () => {
-  console.log(`${process.env.BOT_NAME} ready!`);
+  console.log(`${env.botName} ready!`);
 });
 
 client.once("reconnecting", () => {
-  console.log(`${process.env.BOT_NAME} reconnecting..`);
+  console.log(`${env.botName} reconnecting..`);
 });
 
 client.once("disconnect", () => {
-  console.log(`${process.env.BOT_NAME} disconnected!`);
+  console.log(`${env.botName} disconnected!`);
 });
 
 client.on("message", async message => {
   if (message.author.bot) return;
-  if (!message.content.startsWith(`${process.env.COMMAND_SYMBOL}`)) return;
+  if (!message.content.startsWith(`${env.commandSymbol}`)) return;
 
   if (!message.guild) return;
 
   const serverQueue = queue.get(message.guild.id);
-  if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}play`)) {
+  if (message.content.startsWith(`${env.commandSymbol}play`)) {
     execute(message, serverQueue);
     return;
-  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}stop`)) {
+  } else if (message.content.startsWith(`${env.commandSymbol}stop`)) {
     stop(message, serverQueue);
     return;
-  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}price list`)) {
-    message.reply("```- CCAR\n- BCOIN\n- CSHIP\n- PVU```");
-  } else if (message.content.startsWith(`${process.env.COMMAND_SYMBOL}next`)) {
+  } else if (message.content.startsWith(`${env.commandSymbol}next`)) {
     next(message);
   } else {
     message.channel.send("You need to enter a valid command!");
@@ -119,8 +104,8 @@ async function execute(message: Message, serverQueue: Queue | undefined) {
   }
 
 
-  const result = await searchYoutube(args);
-  const songInfo = await ytdl.getInfo(result.data.items[0].id.videoId);
+  const musicURL = await crawler(args);
+  const songInfo = await ytdl.getInfo(musicURL);
   const song = {
     title: songInfo.videoDetails.title,
     url: songInfo.videoDetails.video_url,
@@ -189,4 +174,4 @@ function play(guild: Discord.Guild, song: Song) {
   }
 }
 
-client.login(process.env.BOT_TOKEN);
+client.login(env.botToken);
